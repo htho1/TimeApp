@@ -15,12 +15,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type User struct {
-	ID primitive.ObjectID `bson:"_id"`
-	Username string `bson:"username"`
-	PasswordHash primitive.Binary `bson:"pswd"`
-}
-
 // Generate a random authentication token
 // Credit: https://stackoverflow.com/questions/25431658/how-to-generate-a-random-token-with-md5
 func genToken() string {
@@ -87,7 +81,8 @@ func main() {
 		return ctx.SendString("Done.")
 	})
 
-	// User login
+	// User login. Returns an authorization token if
+	// username and password match.
 	//
 	// Headers:
 	// username: the username of the account to authenticate
@@ -113,7 +108,7 @@ func main() {
 			panic(err)
 		}
 
-		err = bcrypt.CompareHashAndPassword([]byte(result["pswd"].(string)), []byte(pswd))
+		err = bcrypt.CompareHashAndPassword(result["pswd"].(primitive.Binary).Data, []byte(pswd))
 
 		if err != nil {
 			return ctx.SendString("ErrHashFail")
@@ -121,6 +116,8 @@ func main() {
 
 		token := genToken()
 		authedUsers[token] = result["_id"].(string)
+		fmt.Println(authedUsers)
+
 		return ctx.SendString(token)
 	})
 
