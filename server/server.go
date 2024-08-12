@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -14,6 +15,17 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// Check if a slice contains an element
+// Credit: https://stackoverflow.com/questions/10485743/contains-method-for-a-slice
+func sliceContains(slice []string, elementToCheck string) bool {
+	for _, i := range slice {
+		if i == elementToCheck {
+			return true
+		}
+	}
+	return false
+}
 
 // Generate a random authentication token
 // Credit: https://stackoverflow.com/questions/25431658/how-to-generate-a-random-token-with-md5
@@ -30,11 +42,17 @@ func main() {
 
 	app := fiber.New()
 
+	// Setup CORS
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: []string{"*"},
+	}))
+
 	MONGODB_URI := "mongodb://localhost:27017/"
 	mongoClient, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(MONGODB_URI))
 	db := mongoClient.Database("timeapp")
 
 	authedUsers := make(map[string]string)
+	authedIds := []string{}
 
 	if err != nil {
 		panic(err)
@@ -108,6 +126,10 @@ func main() {
 			panic(err)
 		}
 
+		if sliceContains(authedIds, result["_id"].(string)) {
+			return ctx.SendString("ErrAlreadyAuthed")
+		}
+
 		err = bcrypt.CompareHashAndPassword(result["pswd"].(primitive.Binary).Data, []byte(pswd))
 
 		if err != nil {
@@ -116,6 +138,7 @@ func main() {
 
 		token := genToken()
 		authedUsers[token] = result["_id"].(string)
+		authedIds = append(authedIds, result["_id"].(string))
 		fmt.Println(authedUsers)
 
 		return ctx.SendString(token)
